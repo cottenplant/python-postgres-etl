@@ -10,3 +10,4 @@ docker-compoose up -d
 
 ## Considerations
 - local vs dev env vars for testing / prod
+- break it up into a generator / yield, then write table update queries

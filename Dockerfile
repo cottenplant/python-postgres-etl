@@ -18,3 +18,4 @@ RUN pip install --upgrade pip setuptools && \
     pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
+ENTRYPOINT [ "python", "scripts/etl.py" ]

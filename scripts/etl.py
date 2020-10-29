@@ -1,50 +1,78 @@
 import json
-import os
+from typing import OrderedDict
 import pandas as pd
 import requests
+import sys
 
+from pathlib import Path
 from sqlalchemy import create_engine
-from sqlalchemy import engine
+from sqlalchemy.exc import ProgrammingError
 
 
-ORDERS_FILE = 'data/orders.xlsx'
-BASE_URL = 'http://www.zipcodeapi.com/rest/' \
-           'SJ5Z7T6wru3SpYMGiG8mDrTgq4mbKLgllmrbmaf9AXhJghx92GX4LnFZ102Y6DHk/info.json/{zip_code}/degrees'
+API_KEY = '03NVr7M8zBFsTJnj0ta2E1K5e0uOvfNGEJg2O4soPiPK5BwuRJMnlfHeZ4NXRH0g'
+BASE_URL = 'http://www.zipcodeapi.com/rest/{}/info.json/{}/degrees'
+ORDERS_INFILE = Path('./data', 'orders.xlsx')
+
+db_params = {
+    'host'      : 'db',
+    'database'  : 'challenge',
+    'user'      : 'root',
+    'password'  : 'password'
+}
 
 
-def connect_to_db():
-    conn_str = "postgresql+psycopg2://root:password@db:5432/challenge"
-    engine = create_engine(conn_str)
-    
+def db_connect():
+    connection = 'postgresql://{user}:{password}@{host}/{database}'\
+        .format(**db_params)
+    print('connecting to postgresql db ...')
+    engine = create_engine(connection)
     return engine
-    
-    
-def write_to_db(data_frame, engine):
+
+
+def db_create_seed_table(engine, data_frame, table_name):
+    print(f'creating table {table_name}')
     with engine.connect() as conn:
-        data_frame.to_sql(data_frame, conn)
+        data_frame.to_sql(
+            name=table_name,
+            con=conn,
+            if_exists='replace',
+            index=False
+        )
 
 
-def get_zip_codes():
-    pass
+def db_execute_query(engine, sql_query):
+    with engine.connect() as conn:
+        try: 
+            conn.execute(sql_query)
+        except ProgrammingError as error:
+            print(error, '\ninvalid query')
 
 
-def get_api_data(zip_codes):
-    for zip_code in zip_codes:
-        try:
-            response = requests.get(BASE_URL.format(zip_code)).text
-            payload = json.loads(response)
-            return payload
+def get_api_data(zip_code):
+    try:
+        response = requests.get(BASE_URL.format(API_KEY, zip_code)).text
+        payload = json.loads(response)
+        return payload
+    except requests.exceptions.HTTPError:
+        print(f"zip code {zip_code} is invalid")
+        return None
 
-        except requests.exceptions.HTTPError:
-            print(f"zip code {zip_code} is invalid")
-
-    
 
 def main():
-    orders_df = pd.read_excel(ORDERS_FILE, sheet_name='orders.csv')
-    engine = connect_to_db()
-    write_to_db(orders_df, engine)
+    # initialize db
+    engine = db_connect()
+    orders_df = pd.read_excel(ORDERS_INFILE, sheet_name='orders.csv')
+    db_create_seed_table(engine, orders_df, 'orders')
+    
+    # extract and load data from api
+    zip_codes = set(orders_df['zipcode'].values)
+    zip_codes_loc = [get_api_data(zip_code) for zip_code in zip_codes]
+    zip_codes_loc_df = pd.DataFrame(zip_codes_loc)[['zip_code', 'lat', 'lng', 'city', 'state']]
+    db_create_seed_table(engine, zip_codes_loc_df, 'zip_codes_loc')
 
+    # update database
+
+    engine.dispose()
 
 
 if __name__ == '__main__':

@@ -1,32 +1,21 @@
 version: '3'
 
 services:
-
-  db:
-    image: postgres
-    environment:   # Set up postgres database name and password
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: challenge
-      POSTGRES_USER: root
-    ports: 
-      - 5433:5432
-    networks:
-      - app-tier
-    volumes:
-      - ./postgres:/docker-entrypoint-initdb.d
-
+  
   app:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
       - db
-    networks:
-      - app-tier
-    # command:
-    #   tail -f /dev/null
 
-
-networks:
-  app-tier:
-    driver: bridge
+  db:
+    image: postgres
+    environment: 
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: challenge
+      POSTGRES_USER: root
+    ports: 
+      - 5433:5432
+    volumes:
+      - ./postgres:/docker-entrypoint-initdb.d
